@@ -4,20 +4,6 @@ import L from 'leaflet'
 import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM } from '../../utils/constants'
 import type { Client } from '../../types'
 
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-
-const defaultIcon = new L.Icon({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIconUrl,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
-
 const userLocationIcon = new L.DivIcon({
   html: `<div style="
     width: 18px; height: 18px;
