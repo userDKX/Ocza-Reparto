@@ -230,7 +230,6 @@ export function RouteBuilder() {
     durationMin: number
   } | null>(null)
   const [step, setStep] = useState<'select' | 'preview' | 'executing'>('select')
-  const [recalculating, setRecalculating] = useState(false)
   const [viewingPhoto, setViewingPhoto] = useState<{ src: string; alt: string } | null>(null)
 
   // Execution state
@@ -650,13 +649,6 @@ export function RouteBuilder() {
           coordinates={optimizedResult.coordinates}
         />
 
-        {recalculating && (
-          <div className="flex items-center justify-center gap-2 text-xs text-primary">
-            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
-            Recalculando ruta...
-          </div>
-        )}
-
         <div className="space-y-2">
           <p className="text-xs font-semibold text-navy-mid uppercase tracking-wide">
             Orden de visita
@@ -689,7 +681,7 @@ export function RouteBuilder() {
                 <div className="flex flex-col gap-1 flex-shrink-0">
                   <button
                     onClick={() => moveStop(idx, idx - 1)}
-                    disabled={idx === 0 || recalculating}
+                    disabled={idx === 0}
                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-50 text-slate-500 disabled:opacity-20 active:bg-slate-100"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -698,7 +690,7 @@ export function RouteBuilder() {
                   </button>
                   <button
                     onClick={() => moveStop(idx, idx + 1)}
-                    disabled={idx === optimizedResult.orderedClients.length - 1 || recalculating}
+                    disabled={idx === optimizedResult.orderedClients.length - 1}
                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-50 text-slate-500 disabled:opacity-20 active:bg-slate-100"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
