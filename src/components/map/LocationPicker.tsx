@@ -1,22 +1,7 @@
 import { useState } from 'react'
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
-import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM } from '../../utils/constants'
-
-// Fix default marker icon issue with bundlers
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-
-const defaultIcon = new L.Icon({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIconUrl,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
+import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM, TILE_URL, TILE_ATTRIBUTION } from '../../utils/constants'
+import { locationPinIcon } from './mapIcons'
 
 interface Props {
   value: { lat: number; lng: number } | null
@@ -122,14 +107,12 @@ export function LocationPicker({ value, onChange, onAddressResolved }: Props) {
         center={[center.lat, center.lng]}
         zoom={value ? 17 : DEFAULT_ZOOM}
         className="w-full h-48 rounded-xl z-0"
+        zoomControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
         <ClickHandler onChange={onChange} />
         <FlyTo coords={value} />
-        {value && <Marker position={[value.lat, value.lng]} icon={defaultIcon} />}
+        {value && <Marker position={[value.lat, value.lng]} icon={locationPinIcon} />}
       </MapContainer>
       {value && (
         <p className="text-xs text-slate-400 mt-1">

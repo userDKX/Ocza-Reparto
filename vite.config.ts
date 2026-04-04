@@ -31,29 +31,32 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
+            // CartoDB Positron tiles (map)
+            urlPattern: /^https:\/\/[abc]\.basemaps\.cartocdn\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'osm-tiles',
-              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 1000, maxAgeSeconds: 60 * 60 * 24 * 60 }, // 60 days
               cacheableResponse: { statuses: [0, 200] },
             },
           },
           {
+            // Client photos (Supabase storage)
             urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/client-photos\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'client-photos',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 60 }, // 60 days
               cacheableResponse: { statuses: [0, 200] },
             },
           },
           {
-            urlPattern: /^https:\/\/router\.project-osrm\.org\/.*/i,
+            // OSRM + Google routing APIs
+            urlPattern: /^https:\/\/(router\.project-osrm\.org|maps\.googleapis\.com\/maps\/api\/directions)\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'osrm-routes',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
+              cacheName: 'routing-api',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 7 days
               cacheableResponse: { statuses: [0, 200] },
             },
           },

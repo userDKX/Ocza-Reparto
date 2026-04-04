@@ -10,22 +10,26 @@ export function useLastVisits() {
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
-    // Get most recent completed visit per client
-    const { data } = await supabase
-      .from('visits')
-      .select('client_id, visited_at')
-      .eq('status', 'completed')
-      .order('visited_at', { ascending: false })
+    try {
+      const { data } = await supabase
+        .from('visits')
+        .select('client_id, visited_at')
+        .eq('status', 'completed')
+        .order('visited_at', { ascending: false })
 
-    const map: LastVisitMap = {}
-    if (data) {
-      for (const row of data) {
-        if (!map[row.client_id]) {
-          map[row.client_id] = row.visited_at
+      const map: LastVisitMap = {}
+      if (data) {
+        for (const row of data) {
+          if (!map[row.client_id]) {
+            map[row.client_id] = row.visited_at
+          }
         }
       }
+      setLastVisits(map)
+    } catch {
+      // Table may not exist yet - return empty map
+      setLastVisits({})
     }
-    setLastVisits(map)
     setLoading(false)
   }, [])
 

@@ -21,6 +21,13 @@ function coordsString(points: Point[]): string {
   return points.map((p) => `${p.lng},${p.lat}`).join(';')
 }
 
+/** Fetch with timeout (default 8s) */
+function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 /**
  * Get duration matrix from OSRM Table service.
  * Returns durations in seconds. Throws on failure.
@@ -29,7 +36,7 @@ export async function getDistanceMatrix(points: Point[]): Promise<number[][]> {
   if (points.length < 2) return [[0]]
 
   const url = `${OSRM_BASE}/table/v1/driving/${coordsString(points)}?annotations=duration`
-  const res = await fetch(url)
+  const res = await fetchWithTimeout(url)
   const data: TableResponse = await res.json()
 
   if (data.code !== 'Ok') {
@@ -51,7 +58,7 @@ export async function getRouteGeometry(
   }
 
   const url = `${OSRM_BASE}/route/v1/driving/${coordsString(points)}?overview=full&geometries=geojson`
-  const res = await fetch(url)
+  const res = await fetchWithTimeout(url)
   const data: RouteResponse = await res.json()
 
   if (data.code !== 'Ok' || !data.routes[0]) {

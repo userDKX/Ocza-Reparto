@@ -4,22 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useClients } from '../hooks/useClients'
 import { ClientForm } from '../components/clients/ClientForm'
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
-import L from 'leaflet'
+import { TILE_URL, TILE_ATTRIBUTION } from '../utils/constants'
+import { locationPinIcon } from '../components/map/mapIcons'
 import type { Client } from '../types'
-
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-
-const defaultIcon = new L.Icon({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIconUrl,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -142,12 +129,10 @@ export function ClientDetailPage() {
         className="w-full h-40 rounded-2xl z-0"
         scrollWheelZoom={false}
         dragging={false}
+        zoomControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <Marker position={[client.lat, client.lng]} icon={defaultIcon} />
+        <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
+        <Marker position={[client.lat, client.lng]} icon={locationPinIcon} />
       </MapContainer>
 
       <div className="flex gap-3">

@@ -1,80 +1,19 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
-import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM } from '../../utils/constants'
+import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM, TILE_URL, TILE_ATTRIBUTION } from '../../utils/constants'
+import { userLocationIcon, createStopIcon, createDeliveredStopIcon, createFailedStopIcon, startMarkerIcon, endMarkerIcon } from '../map/mapIcons'
 import type { Client } from '../../types'
+
+export type StopStatus = 'pending' | 'delivered' | 'not_delivered'
 
 interface Props {
   clients: Client[]
   coordinates: [number, number][]
+  visitStatus?: Map<string, StopStatus>
 }
 
-const userLocationIcon = new L.DivIcon({
-  html: `<div style="
-    width: 18px; height: 18px;
-    background: #f97316;
-    border: 3px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 2px 8px rgba(0,0,0,0.15);
-  "></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-  className: '',
-})
-
-function createStopIcon(num: number, photoUrl: string | null) {
-  if (photoUrl) {
-    return new L.DivIcon({
-      html: `<div style="position:relative; width:44px; height:44px;">
-        <div style="
-          width: 44px; height: 44px;
-          border-radius: 50%;
-          border: 3px solid #0f172a;
-          overflow: hidden;
-          background: white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        ">
-          <img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;" />
-        </div>
-        <div style="
-          position: absolute; top: -5px; right: -5px;
-          width: 20px; height: 20px;
-          background: #f97316; color: white;
-          border-radius: 50%; border: 2px solid white;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 10px; font-weight: bold;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        ">${num}</div>
-      </div>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -24],
-      className: '',
-    })
-  }
-
-  return new L.DivIcon({
-    html: `<div style="
-      background: #0f172a;
-      color: white;
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: bold;
-      border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    ">${num}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -18],
-    className: '',
-  })
-}
-
-function UserLocation() {
+function useGpsPosition() {
   const map = useMap()
   const [position, setPosition] = useState<L.LatLng | null>(null)
 
@@ -92,8 +31,11 @@ function UserLocation() {
     return () => navigator.geolocation.clearWatch(watchId)
   }, [map])
 
-  if (!position) return null
+  return position
+}
 
+function UserLocationMarker({ position }: { position: L.LatLng | null }) {
+  if (!position) return null
   return (
     <Marker position={position} icon={userLocationIcon}>
       <Popup>Tu ubicacion actual</Popup>
@@ -101,23 +43,150 @@ function UserLocation() {
   )
 }
 
-function FitBounds({ clients }: { clients: Client[] }) {
+function FitBounds({ clients, gpsPosition }: { clients: Client[]; gpsPosition?: L.LatLng | null }) {
   const map = useMap()
 
   useEffect(() => {
     if (clients.length === 0) return
-    const bounds = L.latLngBounds(clients.map((c) => [c.lat, c.lng]))
+    const points: L.LatLngExpression[] = clients.map((c) => [c.lat, c.lng])
+    if (gpsPosition) points.push(gpsPosition)
+    const bounds = L.latLngBounds(points)
     map.fitBounds(bounds, { padding: [30, 30] })
-  }, [clients, map])
+  }, [clients, gpsPosition, map])
 
   return null
 }
 
-export function RoutePreview({ clients, coordinates }: Props) {
-  const polylinePositions = coordinates.map(
-    ([lng, lat]) => [lat, lng] as [number, number]
-  )
+/** During execution: build polyline from GPS → pending stops */
+function ExecutionPolyline({ clients, visitStatus, gpsPosition }: {
+  clients: Client[]
+  visitStatus: Map<string, StopStatus>
+  gpsPosition: L.LatLng | null
+}) {
+  // Get only pending stops (not yet delivered/failed)
+  const pendingStops = clients.filter((c) => {
+    const s = visitStatus.get(c.id)
+    return s === 'pending' || !s
+  })
 
+  if (pendingStops.length === 0) return null
+
+  // Build path: GPS position → pending stops in order
+  const positions: [number, number][] = []
+
+  if (gpsPosition) {
+    positions.push([gpsPosition.lat, gpsPosition.lng])
+  }
+
+  for (const c of pendingStops) {
+    positions.push([c.lat, c.lng])
+  }
+
+  if (positions.length < 2) return null
+
+  return (
+    <>
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: '#f97316', weight: 12, opacity: 0.2, lineCap: 'round' }}
+      />
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: '#f97316', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
+      />
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: 'white', weight: 2, opacity: 0.5, dashArray: '10 16', lineCap: 'round' }}
+      />
+    </>
+  )
+}
+
+/** During preview: static polyline from coordinates */
+function PreviewPolyline({ coordinates }: { coordinates: [number, number][] }) {
+  const positions = coordinates.map(([lng, lat]) => [lat, lng] as [number, number])
+
+  if (positions.length < 2) return null
+
+  return (
+    <>
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: '#f97316', weight: 12, opacity: 0.2, lineCap: 'round' }}
+      />
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: '#f97316', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
+      />
+      <Polyline
+        positions={positions}
+        pathOptions={{ color: 'white', weight: 2, opacity: 0.5, dashArray: '10 16', lineCap: 'round' }}
+      />
+      <Marker position={positions[0]!} icon={startMarkerIcon}>
+        <Popup>Inicio de ruta</Popup>
+      </Marker>
+      <Marker position={positions[positions.length - 1]!} icon={endMarkerIcon}>
+        <Popup>Fin de ruta</Popup>
+      </Marker>
+    </>
+  )
+}
+
+function MapContent({ clients, coordinates, visitStatus }: Props) {
+  const gpsPosition = useGpsPosition()
+  const isExecuting = !!visitStatus
+  const totalStops = clients.length
+
+  return (
+    <>
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
+      <ZoomControl position="bottomright" />
+      <UserLocationMarker position={gpsPosition} />
+      <FitBounds clients={clients} gpsPosition={isExecuting ? gpsPosition : null} />
+
+      {/* Polyline: different behavior for preview vs execution */}
+      {isExecuting ? (
+        <ExecutionPolyline clients={clients} visitStatus={visitStatus} gpsPosition={gpsPosition} />
+      ) : (
+        <PreviewPolyline coordinates={coordinates} />
+      )}
+
+      {/* Stop markers */}
+      {clients.map((client, idx) => {
+        const status = visitStatus?.get(client.id)
+        const icon = status === 'delivered'
+          ? createDeliveredStopIcon(idx + 1)
+          : status === 'not_delivered'
+            ? createFailedStopIcon(idx + 1)
+            : createStopIcon(idx + 1, totalStops)
+
+        return (
+          <Marker
+            key={client.id}
+            position={[client.lat, client.lng]}
+            icon={icon}
+          >
+            <Popup>
+              <div className="text-sm min-w-[140px]">
+                <p className="font-bold">#{idx + 1} {client.name}</p>
+                {client.owner_name && <p className="text-slate-600">{client.owner_name}</p>}
+                {client.address && <p className="text-slate-500 text-xs">{client.address}</p>}
+                {status === 'delivered' && (
+                  <p className="text-green-600 text-xs font-semibold mt-1">Entregado</p>
+                )}
+                {status === 'not_delivered' && (
+                  <p className="text-red-500 text-xs font-semibold mt-1">No entregado</p>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        )
+      })}
+    </>
+  )
+}
+
+export function RoutePreview({ clients, coordinates, visitStatus }: Props) {
   const center = clients.length > 0
     ? [clients[0]!.lat, clients[0]!.lng] as [number, number]
     : [EL_PEDREGAL_CENTER.lat, EL_PEDREGAL_CENTER.lng] as [number, number]
@@ -127,38 +196,9 @@ export function RoutePreview({ clients, coordinates }: Props) {
       center={center}
       zoom={DEFAULT_ZOOM}
       className="w-full h-72 rounded-2xl z-0"
+      zoomControl={false}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <UserLocation />
-      <FitBounds clients={clients} />
-      {polylinePositions.length > 1 && (
-        <Polyline positions={polylinePositions} color="#f97316" weight={4} opacity={0.9} />
-      )}
-      {clients.map((client, idx) => (
-        <Marker
-          key={client.id}
-          position={[client.lat, client.lng]}
-          icon={createStopIcon(idx + 1, client.photo_url)}
-        >
-          <Popup>
-            <div className="text-sm min-w-[140px]">
-              {client.photo_url && (
-                <img
-                  src={client.photo_url}
-                  alt={client.name}
-                  className="w-full h-24 object-cover rounded mb-2"
-                />
-              )}
-              <p className="font-bold">#{idx + 1} {client.name}</p>
-              {client.owner_name && <p className="text-slate-600">{client.owner_name}</p>}
-              {client.address && <p className="text-slate-500 text-xs">{client.address}</p>}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+      <MapContent clients={clients} coordinates={coordinates} visitStatus={visitStatus} />
     </MapContainer>
   )
 }

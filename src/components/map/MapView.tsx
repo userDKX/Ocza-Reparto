@@ -1,63 +1,9 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
-import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM } from '../../utils/constants'
+import { EL_PEDREGAL_CENTER, DEFAULT_ZOOM, TILE_URL, TILE_ATTRIBUTION } from '../../utils/constants'
+import { userLocationIcon, createClientIcon } from './mapIcons'
 import type { Client } from '../../types'
-
-const userLocationIcon = new L.DivIcon({
-  html: `<div style="
-    width: 18px; height: 18px;
-    background: #f97316;
-    border: 3px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 2px 8px rgba(0,0,0,0.15);
-  "></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-  className: '',
-})
-
-function createClientIcon(photoUrl: string | null, name: string) {
-  if (photoUrl) {
-    return new L.DivIcon({
-      html: `<div style="
-        width: 42px; height: 42px;
-        border-radius: 50%;
-        border: 3px solid #0f172a;
-        overflow: hidden;
-        background: white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      ">
-        <img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;" />
-      </div>`,
-      iconSize: [42, 42],
-      iconAnchor: [21, 21],
-      popupAnchor: [0, -23],
-      className: '',
-    })
-  }
-
-  const initial = name.charAt(0).toUpperCase()
-  return new L.DivIcon({
-    html: `<div style="
-      width: 42px; height: 42px;
-      border-radius: 50%;
-      border: 3px solid #0f172a;
-      background: #fff7ed;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 16px;
-      color: #f97316;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    ">${initial}</div>`,
-    iconSize: [42, 42],
-    iconAnchor: [21, 21],
-    popupAnchor: [0, -23],
-    className: '',
-  })
-}
 
 function CenterOnUser() {
   const map = useMap()
@@ -118,11 +64,10 @@ export function MapView({ clients, onClientClick, height = 'h-[calc(100vh-8rem)]
       center={[EL_PEDREGAL_CENTER.lat, EL_PEDREGAL_CENTER.lng]}
       zoom={DEFAULT_ZOOM}
       className={`w-full ${height} z-0`}
+      zoomControl={false}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
+      <ZoomControl position="bottomright" />
       <CenterOnUser />
       <UserLocation />
       {clients.map((client) => (
