@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useClients } from '../../hooks/useClients'
 import { useLastVisits } from '../../hooks/useVisits'
 import { useRoutes } from '../../hooks/useRoutes'
+import { useGeolocation } from '../../hooks/useGeolocation'
 import { selectClientsForToday, calcUrgency } from '../../lib/clustering'
 import { getRouteGeometry } from '../../lib/osrm'
 import { RoutePreview } from './RoutePreview'
@@ -36,8 +37,11 @@ export function RouteBuilder() {
   const { clients, loading: clientsLoading } = useClients()
   const { lastVisits, loading: visitsLoading } = useLastVisits()
   const { optimizeRoute, optimizing } = useRoutes()
+  const { position: gpsPosition, error: gpsError } = useGeolocation()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [useGps, setUseGps] = useState(true)
+  const [search, setSearch] = useState('')
   const [optimizedResult, setOptimizedResult] = useState<{
     orderedClients: Client[]
     coordinates: [number, number][]
@@ -53,6 +57,17 @@ export function RouteBuilder() {
   const clientsWithUrgency = useMemo(() => {
     return clients.map((c) => calcUrgency(c, lastVisits[c.id] ?? null))
   }, [clients, lastVisits])
+
+  const filteredClients = useMemo(() => {
+    if (!search.trim()) return clientsWithUrgency
+    const q = search.toLowerCase()
+    return clientsWithUrgency.filter(
+      ({ client }) =>
+        client.name.toLowerCase().includes(q) ||
+        client.owner_name?.toLowerCase().includes(q) ||
+        client.zone?.toLowerCase().includes(q)
+    )
+  }, [clientsWithUrgency, search])
 
   function handleAutoSelect() {
     const suggested = selectClientsForToday(clientsWithUrgency)
@@ -80,7 +95,8 @@ export function RouteBuilder() {
     const selected = clients.filter((c) => selectedIds.has(c.id))
     if (selected.length < 2) return
 
-    const result = await optimizeRoute(selected)
+    const startingPoint = useGps && gpsPosition ? gpsPosition : null
+    const result = await optimizeRoute(selected, startingPoint)
     setOptimizedResult(result)
     setStep('preview')
   }
@@ -239,6 +255,39 @@ export function RouteBuilder() {
     <div className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-navy">Construir Ruta</h2>
 
+      {/* GPS toggle */}
+      <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
+        <label className="flex items-center justify-between cursor-pointer">
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-5 h-5 ${gpsPosition ? 'text-green-500' : 'text-slate-300'}`}>
+              <path fillRule="evenodd" d="m9.69 18.933.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 0 0 .281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 1 0 3 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 0 0 2.274 1.765 11.842 11.842 0 0 0 .976.544l.062.029.018.008.006.003ZM10 11.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-navy">Iniciar desde mi ubicacion</p>
+              <p className="text-xs text-slate-400">
+                {gpsPosition
+                  ? 'GPS activo'
+                  : gpsError
+                    ? 'GPS no disponible'
+                    : 'Obteniendo ubicacion...'}
+              </p>
+            </div>
+          </div>
+          <div
+            className={`relative w-11 h-6 rounded-full transition-colors ${
+              useGps && gpsPosition ? 'bg-primary' : 'bg-slate-200'
+            }`}
+            onClick={() => setUseGps((v) => !v)}
+          >
+            <div
+              className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                useGps && gpsPosition ? 'translate-x-5.5' : 'translate-x-0.5'
+              }`}
+            />
+          </div>
+        </label>
+      </div>
+
       <div className="flex gap-2">
         <button
           onClick={handleAutoSelect}
@@ -260,12 +309,36 @@ export function RouteBuilder() {
         </button>
       </div>
 
+      {/* Search within route builder */}
+      <div className="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+          <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+        </svg>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar cliente..."
+          className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm shadow-sm"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        )}
+      </div>
+
       <p className="text-xs text-slate-400">
         {selectedIds.size} de {clients.length} seleccionados
+        {search && ` (mostrando ${filteredClients.length})`}
       </p>
 
       <div className="space-y-2 max-h-96 overflow-y-auto">
-        {clientsWithUrgency
+        {filteredClients
           .sort((a, b) => b.urgency - a.urgency)
           .map(({ client }) => (
           <label

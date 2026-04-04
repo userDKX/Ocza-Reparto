@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ClientCard } from './ClientCard'
 import type { Client } from '../../types'
+
+const PAGE_SIZE = 20
 
 interface Props {
   clients: Client[]
@@ -9,13 +11,28 @@ interface Props {
 
 export function ClientList({ clients, onClientClick }: Props) {
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
 
-  const filtered = clients.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.owner_name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.zone?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() => {
+    if (!search.trim()) return clients
+    const q = search.toLowerCase()
+    return clients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.owner_name?.toLowerCase().includes(q) ||
+        c.zone?.toLowerCase().includes(q)
+    )
+  }, [clients, search])
+
+  // Reset page when search changes
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const currentPage = Math.min(page, Math.max(0, totalPages - 1))
+  const paginated = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+
+  function handleSearch(value: string) {
+    setSearch(value)
+    setPage(0)
+  }
 
   return (
     <div className="space-y-3">
@@ -25,11 +42,28 @@ export function ClientList({ clients, onClientClick }: Props) {
         </svg>
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => handleSearch(e.target.value)}
           placeholder="Buscar cliente, dueno o zona..."
-          className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm shadow-sm"
+          className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm shadow-sm"
         />
+        {search && (
+          <button
+            onClick={() => handleSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {search && (
+        <p className="text-xs text-slate-400">
+          {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+        </p>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -42,11 +76,35 @@ export function ClientList({ clients, onClientClick }: Props) {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((client) => (
-            <ClientCard key={client.id} client={client} onClick={onClientClick} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {paginated.map((client) => (
+              <ClientCard key={client.id} client={client} onClick={onClientClick} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={currentPage === 0}
+                className="px-3 py-2 text-sm font-medium rounded-lg bg-white border border-slate-200 text-navy-mid disabled:opacity-30 active:scale-95 transition-transform"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-slate-400">
+                {currentPage + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={currentPage >= totalPages - 1}
+                className="px-3 py-2 text-sm font-medium rounded-lg bg-white border border-slate-200 text-navy-mid disabled:opacity-30 active:scale-95 transition-transform"
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -12,47 +12,74 @@ interface OptimizedRoute {
   durationMin: number
 }
 
+interface StartingPoint {
+  lat: number
+  lng: number
+}
+
 export function useRoutes() {
   const [optimizing, setOptimizing] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  async function optimizeRoute(clients: Client[]): Promise<OptimizedRoute> {
+  async function optimizeRoute(
+    clients: Client[],
+    startingPoint?: StartingPoint | null
+  ): Promise<OptimizedRoute> {
     setOptimizing(true)
     try {
-      const points: Point[] = clients.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng }))
+      // If we have a GPS starting point, prepend it as a virtual "origin" node
+      const hasOrigin = !!startingPoint
+      const originPoint: Point | null = hasOrigin
+        ? { id: '__origin__', lat: startingPoint!.lat, lng: startingPoint!.lng }
+        : null
+
+      const allPoints: Point[] = [
+        ...(originPoint ? [originPoint] : []),
+        ...clients.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng })),
+      ]
 
       // Get distance matrix (OSRM or fallback to haversine)
       let matrix: number[][]
       try {
-        matrix = await getDistanceMatrix(points)
+        matrix = await getDistanceMatrix(allPoints)
       } catch {
-        matrix = buildHaversineMatrix(points)
+        matrix = buildHaversineMatrix(allPoints)
       }
 
-      // Solve TSP
+      // Solve TSP starting from index 0 (origin if available, else first client)
       const order = solveTSP(matrix, 0)
-      const orderedClients = order.map((i) => clients[i]!)
 
-      // Get route geometry for drawing on map
-      const orderedPoints = order.map((i) => points[i]!)
+      // Remove the origin from the result order, keep only client indices
+      const clientOrder = hasOrigin
+        ? order.filter((i) => i !== 0).map((i) => i - 1) // shift indices since origin was at 0
+        : order
+
+      const orderedClients = clientOrder.map((i) => clients[i]!)
+
+      // Build route geometry: include origin as first waypoint for driving directions
+      const routePoints: Point[] = [
+        ...(originPoint ? [originPoint] : []),
+        ...orderedClients.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng })),
+      ]
+
       let coordinates: [number, number][] = []
       let distanceKm = 0
       let durationMin = 0
 
       try {
-        const geo = await getRouteGeometry(orderedPoints)
+        const geo = await getRouteGeometry(routePoints)
         coordinates = geo.coordinates
         distanceKm = geo.distanceKm
         durationMin = geo.durationMin
       } catch {
         // If OSRM fails, estimate from haversine
         let totalMeters = 0
-        for (let i = 0; i < orderedPoints.length - 1; i++) {
+        for (let i = 0; i < order.length - 1; i++) {
           totalMeters += matrix[order[i]!]![order[i + 1]!]!
         }
         distanceKm = totalMeters / 1000
         durationMin = (totalMeters / 1000 / 30) * 60 // estimate 30km/h
-        coordinates = orderedPoints.map((p) => [p.lng, p.lat])
+        coordinates = routePoints.map((p) => [p.lng, p.lat])
       }
 
       return { orderedClients, coordinates, distanceKm, durationMin }
